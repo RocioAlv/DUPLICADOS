@@ -1,5 +1,4 @@
-<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Control de Duplicados</title>
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Auditoría de pedidos y rechazos</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600&display=swap">
 <style>
@@ -21,6 +20,7 @@
   --accent:#6db3e0; --accent-fg:#0d1a24; --accent-soft:#1d3444;
   --bad:#ff8a80; --bad-soft:#3a1f1d; --warn:#f2c46b; --warn-soft:#3a2e14; --info:#a9c0d2; --info-soft:#24313c; color-scheme:dark}
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:14px;line-height:1.5;padding-inline:16px;padding-block:24px 48px}
 .wrap{max-width:1040px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
 h1{font-family:var(--f-display);font-size:28px;line-height:1.1;margin:0;letter-spacing:.01em;text-wrap:balance}
@@ -30,7 +30,7 @@ h2{font-family:var(--f-display);font-size:18px;margin:0}
 .drop{border:1.5px dashed var(--accent);background:var(--surface);border-radius:6px;padding:28px 20px;display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;cursor:pointer}
 .drop.over{background:var(--accent-soft)}
 .drop:focus-visible,button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.drop strong{font-size:16px}
+.drop strong{font-size:16px;overflow-wrap:anywhere;max-width:100%}
 .drop small{color:var(--muted)}
 button,.btn{font:inherit;font-weight:500;background:var(--accent);color:var(--accent-fg);border:0;border-radius:4px;padding:8px 14px;cursor:pointer}
 button.ghost{background:transparent;color:var(--accent);border:1px solid var(--accent)}
@@ -38,8 +38,8 @@ button:disabled{opacity:.5;cursor:not-allowed}
 .status{color:var(--muted);min-height:1.5em}
 .status.err{color:var(--bad)}
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
-.stat{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:12px 14px;display:flex;flex-direction:column;gap:2px}
-.stat b{font-family:var(--f-mono);font-size:24px;font-weight:500}
+.stat{min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:12px 14px;display:flex;flex-direction:column;gap:2px}
+.stat b{font-family:var(--f-mono);font-size:22px;font-weight:500;overflow-wrap:anywhere}
 .stat span{color:var(--muted);font-size:12px}
 .stat.bad b{color:var(--bad)}.stat.warn b{color:var(--warn)}
 .bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
@@ -72,14 +72,42 @@ tr.tot td{font-weight:600;border-bottom:0}
 .rules div{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
 .rules p{margin:0;color:var(--muted)}
 .foot{color:var(--muted);font-size:12px}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);overflow-x:auto}
+.tab{background:transparent;color:var(--muted);border-radius:4px 4px 0 0;border-bottom:2px solid transparent;padding:9px 14px;white-space:nowrap}
+.tab[aria-selected="true"]{color:var(--fg);border-bottom-color:var(--accent);font-weight:600}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:12px 14px;display:flex;flex-direction:column;gap:12px}
+.fl{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap}
+.lab{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);width:52px;padding-top:7px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;align-items:center;flex:1;min-width:0}
+.chip{background:transparent;color:var(--fg);border:1px solid var(--line);padding:5px 10px;border-radius:99px;font-size:13px}
+.chip[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+button.sm{padding:5px 10px;font-size:13px}
+.mot{flex-basis:100%}.mot summary{cursor:pointer;color:var(--accent)}
+.motgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:4px 14px;margin-top:8px}
+.motgrid label{display:flex;gap:6px;align-items:center;font-size:13px}
+table.rank th{cursor:pointer}
+table.rank th.sorted::after{content:" ↓";color:var(--accent)}
+table.rank tr.main{cursor:pointer}
+table.rank tr.main:hover td{background:var(--accent-soft)}
+table.rank td.pos{color:var(--muted);font-family:var(--f-mono)}
+tr.det td{background:var(--bg);padding:10px 12px}
+.detg{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:16px}
+.detg h3{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:0 0 4px;font-weight:500}
+.bd{display:flex;justify-content:space-between;gap:10px;padding:2px 0;border-bottom:1px solid var(--line)}
+.pct{font-family:var(--f-mono)}
 </style>
 </head><body>
 <div class="wrap">
   <header>
-    <h1>Control de Duplicados</h1>
-    <p class="sub">Subí el PDF “Control y ajuste de pedidos” de ChessERP. La herramienta lee los pedidos y marca los que un mismo cliente cargó más de una vez. El PDF se procesa en tu navegador.</p>
+    <h1>Auditoría de pedidos y rechazos</h1>
+    <p class="sub">Herramientas para la auditoría: pedidos duplicados y ranking de clientes con más rechazos. Los archivos se procesan en tu navegador.</p>
   </header>
 
+  <div class="tabs" role="tablist">
+    <button role="tab" id="tabA" aria-selected="true" aria-controls="pA" class="tab">Pedidos duplicados</button>
+    <button role="tab" id="tabB" aria-selected="false" aria-controls="pB" class="tab">Rechazos por cliente</button>
+  </div>
+  <div id="pA" role="tabpanel" style="display:flex;flex-direction:column;gap:20px">
   <label class="drop" id="drop" tabindex="0" for="file">
     <strong id="dropTitle">Soltá el PDF acá o hacé clic para elegirlo</strong>
     <small>Formato: Control y ajuste de pedidos, consolidado por precarga</small>
@@ -104,9 +132,32 @@ tr.tot td{font-weight:600;border-bottom:0}
       <div class="tw" style="margin-top:10px"><table id="all"></table></div>
     </details>
   </section>
+  </div>
+  <div id="pB" role="tabpanel" hidden style="display:flex;flex-direction:column;gap:20px">
+    <p class="sub">Subí el archivo de rechazos (.xlsm) una vez por mes. Lee la hoja BASE y arma el ranking de clientes con más rechazos. El archivo acumula todo el año, así que siempre subís la versión más nueva. Los datos quedan guardados en este navegador.</p>
+    <label class="drop" id="rdrop" tabindex="0" for="rfile">
+      <strong id="rdropTitle">Soltá el archivo de rechazos acá o hacé clic para elegirlo</strong>
+      <small>Excel con la hoja BASE (Rechazos 2026, indicadores logísticos)</small>
+      <input id="rfile" type="file" accept=".xlsm,.xlsx" hidden>
+    </label>
+    <div class="status" id="rStatus" role="status"></div>
+    <section id="rResult" hidden style="display:flex;flex-direction:column;gap:16px">
+      <div class="stats" id="rStats"></div>
+      <div class="panel">
+        <div class="fl"><span class="lab">Mes</span><div class="chips" id="rMonths"></div></div>
+        <div class="fl"><span class="lab">Motivo</span>
+          <div class="chips"><button type="button" class="ghost sm" id="mAll">Todos</button><button type="button" class="ghost sm" id="mCli">Solo los que controla el cliente</button>
+          <details class="mot"><summary>Elegir motivos</summary><div id="rMot" class="motgrid"></div></details></div></div>
+        <div class="bar"><div class="l"><input type="search" id="rq" placeholder="Buscar cliente, nombre o vendedor" aria-label="Buscar cliente">
+        </div><button id="rxls" type="button">Descargar Excel</button></div>
+      </div>
+      <div class="tw"><table id="rTable" class="rank"></table></div>
+      <div><button type="button" class="ghost" id="rMore">Ver más clientes</button></div>
+    </section>
+  </div>
   <p class="foot">Los pedidos se comparan solo dentro del mismo cliente. Si el mismo cliente aparece con distinto nombre, no se agrupa.</p>
 </div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script><script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script><script>
 function num(s){return parseFloat(String(s).replace(/,/g,''));}
 function parseLines(lines){
   const orders=[];let cur=null;
@@ -154,6 +205,112 @@ function analyze(orders){
   }
   groups.sort((a,b)=>b.orders[0].total-a.orders[0].total);
   return groups;
+}
+/* Lectura de la hoja BASE del archivo de rechazos (.xlsm/.xlsx), en streaming para no cargar 160 MB de XML en memoria. */
+const MESES=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+function normH(s){return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim().toUpperCase();}
+function unesc(s){return s.indexOf('&')<0?s:s.replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&apos;/g,"'").replace(/&amp;/g,'&');}
+function parseSharedStrings(xml){
+  const out=[];const re=/<si>([\s\S]*?)<\/si>|<si\/>/g;let m;
+  while((m=re.exec(xml))){let s='';if(m[1]){const t=/<t[^>]*>([\s\S]*?)<\/t>/g;let x;while((x=t.exec(m[1])))s+=x[1];}out.push(unesc(s));}
+  return out;
+}
+const NEED={mes:'MES',fecha:'FECHA',motivo:'MOTIVO DE RECHAZO',cli:'CLIENTE',nombre:'DESCRIPCION CLIENTE',doc:'DETALLE DOCUMENTO',
+  bultos:'BULTOS',brech:'BULTOS RECHAZADOS',imp:'IMPORTE NETO',irech:'IMPORTE NETO RECHAZADO',vend:'DESCRIPCION VENDEDOR',ruta:'DESCRIPCION RUTA'};
+const REQ=['fecha','motivo','cli','nombre','doc','bultos','brech','irech'];
+
+class BaseReader{
+  constructor(ss){this.ss=ss;this.cols=null;this.colKey=null;this.rowsSeen=0;
+    this.ven=new Map();this.docs=new Map();this.rech=[];this.clients=new Map();this.months=new Map();this.tail='';this.lines=0;}
+  cellVal(attrs,v,isv){
+    if(v===undefined&&isv===undefined)return null;
+    if(isv!==undefined)return unesc(isv);
+    if(/ t="s"/.test(attrs))return this.ss[+v];
+    if(/ t="(str|inlineStr|e|b)"/.test(attrs))return unesc(v);
+    return +v;
+  }
+  feed(text,final){
+    this.tail+=text;
+    let cut=final?this.tail.length:this.tail.lastIndexOf('</row>');
+    if(cut<0)return; if(!final)cut+=6;
+    const block=this.tail.slice(0,cut);this.tail=this.tail.slice(cut);
+    const rowRe=/<row r="(\d+)"[^>]*?(?:\/>|>([\s\S]*?)<\/row>)/g;let rm;
+    while((rm=rowRe.exec(block))){
+      if(!rm[2])continue;
+      const cells={};
+      const cRe=/<c r="([A-Z]+)\d+"([^>]*?)>(?:<f[^>]*>[\s\S]*?<\/f>|<f[^>]*\/>)?(?:<v>([\s\S]*?)<\/v>|<is>[\s\S]*?<t[^>]*>([\s\S]*?)<\/t>[\s\S]*?<\/is>)?<\/c>/g;let cm;
+      while((cm=cRe.exec(rm[2]))){
+        if(!this.cols){cells[cm[1]]=this.cellVal(cm[2],cm[3],cm[4]);}
+        else if(this.colKey.has(cm[1])){cells[cm[1]]=this.cellVal(cm[2],cm[3],cm[4]);}
+      }
+      if(!this.cols){
+        const map={};for(const L in cells)map[normH(cells[L])]=L;
+        if(map['CLIENTE']&&map['BULTOS RECHAZADOS']){
+          this.cols={};for(const k in NEED)this.cols[k]=map[NEED[k]]||null;
+          const miss=REQ.filter(k=>!this.cols[k]);
+          if(miss.length)throw new Error('Faltan columnas en la hoja BASE: '+miss.map(k=>NEED[k]).join(', '));
+          this.colKey=new Set(Object.values(this.cols).filter(Boolean));
+        }
+        continue;
+      }
+      this.line(cells);
+    }
+  }
+  line(c){
+    const C=this.cols,g=k=>C[k]?c[C[k]]:null;
+    const cli=g('cli');if(cli==null||cli==='')return;
+    const f=g('fecha');if(typeof f!=='number')return;
+    const d=new Date(Date.UTC(1899,11,30)+Math.round(f)*864e5);
+    const ym=d.getUTCFullYear()*12+d.getUTCMonth();
+    if(!this.months.has(ym))this.months.set(ym,MESES[d.getUTCMonth()]+' '+d.getUTCFullYear());
+    const k=cli+'|'+ym;
+    let v=this.ven.get(k);if(!v){v=[String(cli),ym,0,0];this.ven.set(k,v);this.docs.set(k,new Set());}
+    const b=+g('bultos')||0,imp=+g('imp')||0;v[2]+=b;v[3]+=imp;
+    const doc=g('doc');this.docs.get(k).add(doc);
+    let cl=this.clients.get(String(cli));if(!cl){cl={n:String(g('nombre')||''),v:'',r:''};this.clients.set(String(cli),cl);}
+    if(g('vend'))cl.v=String(g('vend'));if(g('ruta'))cl.r=String(g('ruta'));
+    const br=+g('brech')||0;
+    if(br>0){this.rech.push([String(cli),ym,String(g('motivo')||'SIN MOTIVO'),Math.round(br*100)/100,Math.round((+g('irech')||0)*100)/100,String(doc)]);}
+  }
+  result(){
+    const ven=[];for(const [k,v] of this.ven)ven.push([v[0],v[1],Math.round(v[2]*100)/100,Math.round(v[3]*100)/100,this.docs.get(k).size]);
+    const months=[...this.months.entries()].sort((a,b)=>a[0]-b[0]).map(([ym,label])=>({ym,label}));
+    const clients={};for(const [k,v] of this.clients)clients[k]=v;
+    return {months,clients,ven,rech:this.rech};
+  }
+}
+
+async function readRechazos(buf,progress){
+  const zip=await JSZip.loadAsync(buf);
+  const txt=async p=>{const f=zip.file(p);return f?await f.async('string'):null;};
+  progress&&progress('Abriendo el archivo…');
+  const ssx=await txt('xl/sharedStrings.xml');const ss=ssx?parseSharedStrings(ssx):[];
+  const wb=await txt('xl/workbook.xml'),rels=await txt('xl/_rels/workbook.xml.rels');
+  let target='xl/worksheets/sheet1.xml';
+  if(wb&&rels){
+    const sm=[...wb.matchAll(/<sheet [^>]*?name="([^"]*)"[^>]*?r:id="([^"]*)"/g)].find(m=>normH(unesc(m[1]))==='BASE');
+    if(!sm)throw new Error('No encontré la hoja BASE en el archivo.');
+    const rm=[...rels.matchAll(/<Relationship [^>]*>/g)].map(m=>m[0]).find(t=>t.includes('Id="'+sm[2]+'"'));
+    const tg=rm&&rm.match(/Target="([^"]*)"/);
+    if(tg)target=tg[1].replace(/^\/?(xl\/)?/,'xl/');
+  }
+  const file=zip.file(target);if(!file)throw new Error('No pude abrir la hoja BASE.');
+  const rd=new BaseReader(ss);
+  const dec=new TextDecoder('utf-8');
+  const total=(file._data&&file._data.uncompressedSize)||0;let done=0,last=0;
+  await new Promise((res,rej)=>{
+    const st=file.internalStream('uint8array');
+    st.on('data',chunk=>{
+      try{rd.feed(dec.decode(chunk,{stream:true}),false);}catch(e){st.pause&&st.pause();rej(e);return;}
+      done+=chunk.length;const now=Date.now();
+      if(progress&&now-last>300){last=now;progress('Leyendo la hoja BASE'+(total?' ('+Math.min(99,Math.round(done*100/total))+'%)':'…'));}
+    });
+    st.on('error',rej);
+    st.on('end',()=>{try{rd.feed(dec.decode(),true);res();}catch(e){rej(e);}});
+    st.resume();
+  });
+  if(!rd.cols)throw new Error('No encontré la fila de títulos (CLIENTE, BULTOS RECHAZADOS) en la hoja BASE.');
+  return rd.result();
 }
 const $=id=>document.getElementById(id);
 const fmt=n=>n.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -228,6 +385,11 @@ function groupHtml(g){
 }
 
 function dupRows(){const r=[];GROUPS.forEach((g,k)=>g.orders.forEach(o=>r.push({Grupo:k+1,Tipo:NIV[g.nivel],Cliente:g.cli,Nombre:g.nombre,Pedido:o.ped,Fecha:o.fecha,Vendedor:o.vnd,Items:o.items.length,'Total final':o.total})));return r;}
+async function saveWb(wb,name){
+  let dl=null;try{if(window.claude&&window.claude.use)dl=await window.claude.use('downloads');}catch(e){}
+  if(dl){await dl.save({filename:name,data:new Uint8Array(XLSX.write(wb,{type:'array',bookType:'xlsx'}))});}
+  else XLSX.writeFile(wb,name);
+}
 async function exportXls(){
   try{
     if(typeof XLSX==='undefined')throw {code:'xlsx_no_cargo',message:'No cargó la librería de Excel (revisá la conexión y recargá la página).'};
@@ -237,7 +399,7 @@ async function exportXls(){
     XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(ORDERS.map(o=>({Fecha:o.fecha,Pedido:o.ped,Cliente:o.cli,Nombre:o.nombre,Vendedor:o.vnd,Items:o.items.length,'Total final':o.total}))),'Pedidos');
     const det=[];ORDERS.forEach(o=>o.items.forEach(i=>det.push({Pedido:o.ped,Cliente:o.cli,Nombre:o.nombre,Codigo:i.codigo,Articulo:i.desc,Bultos:i.bultos,Unidades:i.unidades,Precio:i.precio,Bonificacion:i.bonif,'Subtotal neto':i.neto,'Subtotal final':i.final})));
     XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(det),'Detalle');
-        XLSX.writeFile(wb,'pedidos-duplicados.xlsx');
+    await saveWb(wb,'pedidos-duplicados.xlsx');
     setStatus('');
   }catch(e){
     if(e&&e.code==='declined')return;
@@ -259,4 +421,132 @@ $('file').addEventListener('change',e=>handle(e.target.files[0]));
 drop.addEventListener('drop',e=>handle(e.dataTransfer.files[0]));
 drop.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();$('file').click();}});
 $('q').addEventListener('input',render);$('xls').addEventListener('click',exportXls);$('cp').addEventListener('click',copySheets);
+/* ---- Pestañas ---- */
+function showTab(t){const A=t==='A';$('pA').hidden=!A;$('pB').hidden=A;$('tabA').setAttribute('aria-selected',A);$('tabB').setAttribute('aria-selected',!A);
+  try{history.replaceState(null,'','#'+(A?'duplicados':'rechazos'));}catch(e){}}
+$('tabA').addEventListener('click',()=>showTab('A'));$('tabB').addEventListener('click',()=>showTab('B'));
+
+/* ---- Rechazos por cliente ---- */
+const CLI_MOT=['SIN DINERO','CERRADO','PEDIDO ERRONEO BEES','NO LO QUISO','NO REALIZO PEDIDO','SIN ENVASES'];
+const LS='rechazos_v1';
+let RD=null,selM=new Set(),selMot=new Set(),rq='',sortK='b',sortDir=-1,shown=25,openCli=null,rows=[];
+const fmt1=n=>n.toLocaleString('es-AR',{minimumFractionDigits:0,maximumFractionDigits:1});
+const pct=n=>(n*100).toLocaleString('es-AR',{minimumFractionDigits:1,maximumFractionDigits:1})+'%';
+function rStatus(t,err){const s=$('rStatus');s.textContent=t;s.className='status'+(err?' err':'');}
+
+async function handleR(file){
+  if(!file)return;
+  if(!/\.(xlsm|xlsx)$/i.test(file.name)){rStatus('El archivo tiene que ser un Excel (.xlsm o .xlsx).',true);return;}
+  try{
+    rStatus('Abriendo el archivo…');
+    const data=await readRechazos(await file.arrayBuffer(),rStatus);
+    if(!data.rech.length&&!data.ven.length)throw new Error('La hoja BASE no tiene datos.');
+    RD={file:file.name,loadedAt:new Date().toISOString(),data};
+    try{localStorage.setItem(LS,JSON.stringify(RD));}catch(e){}
+    initR();rStatus('');
+  }catch(e){console.error(e);rStatus('No pude leer el archivo: '+(e&&e.message||e),true);}
+}
+
+function initR(){
+  const d=RD.data;
+  selM=new Set(d.months.map(m=>m.ym));
+  const mots=[...new Set(d.rech.map(r=>r[2]))].sort();
+  selMot=new Set(mots);
+  $('rdropTitle').textContent=RD.file;
+  $('rMonths').innerHTML=d.months.map(m=>`<button type="button" class="chip" data-ym="${m.ym}" aria-pressed="true">${m.label.split(' ')[0]}</button>`).join('')+
+    '<button type="button" class="ghost sm" id="mAllM">Todos</button>';
+  $('rMot').innerHTML=mots.map(m=>`<label><input type="checkbox" data-mot="${esc(m)}" checked> ${esc(m)}</label>`).join('');
+  $('rResult').hidden=false;shown=25;openCli=null;renderR();
+}
+
+function compute(){
+  const d=RD.data,agg=new Map();
+  const get=c=>{let a=agg.get(c);if(!a){const cl=d.clients[c]||{n:'',v:'',r:''};a={cli:c,n:cl.n,v:cl.v,r:cl.r,b:0,imp:0,docs:new Set(),mot:new Map(),mes:new Map(),venta:0,ventaDocs:0};agg.set(c,a);}return a;};
+  for(const v of d.ven){if(selM.has(v[1])){const a=get(v[0]);a.venta+=v[2];a.ventaDocs+=v[4];}}
+  for(const r of d.rech){
+    if(!selM.has(r[1])||!selMot.has(r[2]))continue;
+    const a=get(r[0]);a.b+=r[3];a.imp+=r[4];a.docs.add(r[5]);
+    a.mot.set(r[2],(a.mot.get(r[2])||0)+r[3]);a.mes.set(r[1],(a.mes.get(r[1])||0)+r[3]);
+  }
+  rows=[...agg.values()].filter(a=>a.b>0).map(a=>{
+    a.nd=a.docs.size;a.pct=a.venta>0?a.b/a.venta:0;a.nm=a.mes.size;
+    a.top=[...a.mot.entries()].sort((x,y)=>y[1]-x[1])[0][0];return a;});
+}
+
+function renderR(){
+  compute();
+  const d=RD.data,q=rq.trim().toLowerCase();
+  let list=rows.filter(a=>!q||(a.cli+' '+a.n+' '+a.v).toLowerCase().includes(q));
+  const k=sortK,dir=sortDir;
+  list.sort((x,y)=>{const A=x[k],B=y[k];return (typeof A==='string'?A.localeCompare(B):A-B)*dir||y.b-x.b;});
+  const totB=rows.reduce((s,a)=>s+a.b,0),totI=rows.reduce((s,a)=>s+a.imp,0),totV=[...selM].length?d.ven.filter(v=>selM.has(v[1])).reduce((s,v)=>s+v[2],0):0;
+  const nd=rows.reduce((s,a)=>s+a.nd,0);
+  $('rStats').innerHTML=
+   `<div class="stat bad"><b>${fmt1(totB)}</b><span>bultos rechazados</span></div>`+
+   `<div class="stat"><b>${totV?pct(totB/totV):'-'}</b><span>% sobre ${fmt1(totV)} bultos de venta</span></div>`+
+   `<div class="stat"><b>${rows.length}</b><span>clientes con rechazos · ${nd} facturas</span></div>`+
+   `<div class="stat"><b>$ ${fmt(totI)}</b><span>importe neto rechazado</span></div>`;
+  const cols=[['pos','#',0],['cli','Cliente',1],['b','Bultos rech.',1],['pct','% rechazo',1],['nd','Facturas',1],['imp','Importe rech.',1],['nm','Meses',1],['top','Motivo principal',1]];
+  let h='<thead><tr><th>#</th><th data-k="cli" class="'+(k==='cli'?'sorted':'')+'">Cliente</th>'+
+   [['b','Bultos rech.'],['pct','% rechazo'],['nd','Facturas'],['imp','Importe rech.'],['nm','Meses']].map(([kk,l])=>`<th class="n ${k===kk?'sorted':''}" data-k="${kk}">${l}</th>`).join('')+
+   `<th data-k="top" class="${k==='top'?'sorted':''}">Motivo principal</th></tr></thead><tbody>`;
+  list.slice(0,shown).forEach((a,i)=>{
+    h+=`<tr class="main" data-c="${esc(a.cli)}" tabindex="0"><td class="pos">${i+1}</td><td><span class="mono" style="color:var(--muted)">(${esc(a.cli)})</span> ${esc(a.n)}${a.v?`<br><span style="color:var(--muted);font-size:12px">${esc(a.v)}</span>`:''}</td>`+
+     `<td class="n">${fmt1(a.b)}</td><td class="n">${a.venta?pct(a.pct):'-'}</td><td class="n">${a.nd}</td><td class="n">${fmt(a.imp)}</td><td class="n">${a.nm}</td><td>${esc(a.top)}</td></tr>`;
+    if(openCli===a.cli){
+      const mot=[...a.mot.entries()].sort((x,y)=>y[1]-x[1]);
+      const mes=d.months.filter(m=>a.mes.has(m.ym));
+      h+=`<tr class="det"><td></td><td colspan="7"><div class="detg"><div><h3>Por motivo (bultos)</h3>${mot.map(([m,v])=>`<div class="bd"><span>${esc(m)}</span><b class="mono">${fmt1(v)}</b></div>`).join('')}</div>`+
+        `<div><h3>Por mes (bultos)</h3>${mes.map(m=>`<div class="bd"><span>${m.label}</span><b class="mono">${fmt1(a.mes.get(m.ym))}</b></div>`).join('')}</div></div></td></tr>`;
+    }
+  });
+  h+='</tbody>';
+  $('rTable').innerHTML=list.length?h:'<tbody><tr><td class="empty">No hay clientes con rechazos para este filtro.</td></tr></tbody>';
+  $('rMore').hidden=list.length<=shown;
+  $('rMore').textContent='Ver más clientes ('+(list.length-shown)+' restantes)';
+  RD._list=list;
+}
+
+async function exportR(){
+  try{
+    if(typeof XLSX==='undefined')throw new Error('No cargó la librería de Excel. Recargá la página.');
+    const d=RD.data,list=RD._list||[];
+    const ml=d.months.filter(m=>selM.has(m.ym));
+    const rk=list.map((a,i)=>({'#':i+1,Cliente:a.cli,Nombre:a.n,Vendedor:a.v,Ruta:a.r,'Bultos rechazados':Math.round(a.b*100)/100,'Bultos venta':Math.round(a.venta*100)/100,'% rechazo':a.venta?Math.round(a.pct*10000)/10000:null,Facturas:a.nd,'Importe rechazado':Math.round(a.imp*100)/100,'Meses con rechazo':a.nm,'Motivo principal':a.top}));
+    const dm=[];list.forEach(a=>[...a.mot.entries()].sort((x,y)=>y[1]-x[1]).forEach(([m,v])=>dm.push({Cliente:a.cli,Nombre:a.n,Motivo:m,'Bultos rechazados':Math.round(v*100)/100})));
+    const pm=list.map(a=>{const o={Cliente:a.cli,Nombre:a.n};ml.forEach(m=>o[m.label]=Math.round((a.mes.get(m.ym)||0)*100)/100);return o;});
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(rk),'Ranking');
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(dm),'Por motivo');
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(pm),'Por mes');
+    await saveWb(wb,'ranking-rechazos-clientes.xlsx');rStatus('');
+  }catch(e){if(e&&e.code==='declined')return;console.error(e);rStatus('No se pudo descargar el Excel: '+((e&&e.message)||'error'),true);}
+}
+
+$('rfile').addEventListener('change',e=>handleR(e.target.files[0]));
+const rd=$('rdrop');
+['dragover','dragenter'].forEach(ev=>rd.addEventListener(ev,e=>{e.preventDefault();rd.classList.add('over');}));
+['dragleave','drop'].forEach(ev=>rd.addEventListener(ev,e=>{e.preventDefault();rd.classList.remove('over');}));
+rd.addEventListener('drop',e=>handleR(e.dataTransfer.files[0]));
+rd.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();$('rfile').click();}});
+$('rMonths').addEventListener('click',e=>{
+  const t=e.target.closest('button');if(!t)return;
+  if(t.id==='mAllM'){selM=new Set(RD.data.months.map(m=>m.ym));}
+  else{const y=+t.dataset.ym;selM.has(y)?selM.delete(y):selM.add(y);}
+  $('rMonths').querySelectorAll('.chip').forEach(c=>c.setAttribute('aria-pressed',selM.has(+c.dataset.ym)));
+  shown=25;renderR();});
+function syncMot(){$('rMot').querySelectorAll('input').forEach(i=>i.checked=selMot.has(i.dataset.mot));}
+$('rMot').addEventListener('change',e=>{const m=e.target.dataset.mot;e.target.checked?selMot.add(m):selMot.delete(m);shown=25;renderR();});
+$('mAll').addEventListener('click',()=>{selMot=new Set(RD.data.rech.map(r=>r[2]));syncMot();shown=25;renderR();});
+$('mCli').addEventListener('click',()=>{selMot=new Set(RD.data.rech.map(r=>r[2]).filter(m=>CLI_MOT.includes(m)));syncMot();shown=25;renderR();});
+$('rq').addEventListener('input',e=>{rq=e.target.value;shown=25;renderR();});
+$('rMore').addEventListener('click',()=>{shown+=50;renderR();});
+$('rxls').addEventListener('click',exportR);
+$('rTable').addEventListener('click',e=>{
+  const th=e.target.closest('th[data-k]');
+  if(th){const k=th.dataset.k;if(sortK===k)sortDir*=-1;else{sortK=k;sortDir=(k==='cli'||k==='top')?1:-1;}renderR();return;}
+  const tr=e.target.closest('tr.main');if(tr){openCli=openCli===tr.dataset.c?null:tr.dataset.c;renderR();}});
+$('rTable').addEventListener('keydown',e=>{if(e.key==='Enter'){const tr=e.target.closest('tr.main');if(tr){openCli=openCli===tr.dataset.c?null:tr.dataset.c;renderR();}}});
+try{const s=localStorage.getItem(LS);if(s){RD=JSON.parse(s);if(RD&&RD.data){initR();rStatus('Datos guardados de “'+RD.file+'”, cargados el '+new Date(RD.loadedAt).toLocaleDateString('es-AR')+'. Subí un archivo nuevo para actualizar.');}}}catch(e){RD=null;}
+if(location.hash==='#rechazos')showTab('B');
 </script></body></html>
