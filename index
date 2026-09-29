@@ -1,0 +1,262 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Control de Duplicados</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@600&display=swap">
+<style>
+/* Layout: una columna de trabajo. Carga de PDF arriba, resumen, lista de grupos duplicados con los pedidos lado a lado. */
+:root{
+  --bg:#f3f5f7; --surface:#ffffff; --fg:#17202a; --muted:#5d6b78; --line:#d9e0e6;
+  --accent:#1f5f8b; --accent-fg:#ffffff; --accent-soft:#e3eff7;
+  --bad:#b3261e; --bad-soft:#fbe9e7; --warn:#8a5a00; --warn-soft:#fff1d6; --info:#38566e; --info-soft:#e6edf2;
+  --f-display:"IBM Plex Sans Condensed","Arial Narrow",sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#12181e; --surface:#1b232b; --fg:#e6ebef; --muted:#93a1ad; --line:#2f3b46;
+  --accent:#6db3e0; --accent-fg:#0d1a24; --accent-soft:#1d3444;
+  --bad:#ff8a80; --bad-soft:#3a1f1d; --warn:#f2c46b; --warn-soft:#3a2e14; --info:#a9c0d2; --info-soft:#24313c; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12181e; --surface:#1b232b; --fg:#e6ebef; --muted:#93a1ad; --line:#2f3b46;
+  --accent:#6db3e0; --accent-fg:#0d1a24; --accent-soft:#1d3444;
+  --bad:#ff8a80; --bad-soft:#3a1f1d; --warn:#f2c46b; --warn-soft:#3a2e14; --info:#a9c0d2; --info-soft:#24313c; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:14px;line-height:1.5;padding-inline:16px;padding-block:24px 48px}
+.wrap{max-width:1040px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+h1{font-family:var(--f-display);font-size:28px;line-height:1.1;margin:0;letter-spacing:.01em;text-wrap:balance}
+h2{font-family:var(--f-display);font-size:18px;margin:0}
+.sub{color:var(--muted);margin:4px 0 0;max-width:65ch}
+.mono,td.n,th.n{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.drop{border:1.5px dashed var(--accent);background:var(--surface);border-radius:6px;padding:28px 20px;display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;cursor:pointer}
+.drop.over{background:var(--accent-soft)}
+.drop:focus-visible,button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.drop strong{font-size:16px}
+.drop small{color:var(--muted)}
+button,.btn{font:inherit;font-weight:500;background:var(--accent);color:var(--accent-fg);border:0;border-radius:4px;padding:8px 14px;cursor:pointer}
+button.ghost{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+button:disabled{opacity:.5;cursor:not-allowed}
+.status{color:var(--muted);min-height:1.5em}
+.status.err{color:var(--bad)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:12px 14px;display:flex;flex-direction:column;gap:2px}
+.stat b{font-family:var(--f-mono);font-size:24px;font-weight:500}
+.stat span{color:var(--muted);font-size:12px}
+.stat.bad b{color:var(--bad)}.stat.warn b{color:var(--warn)}
+.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.bar .l{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+input[type=search],select{font:inherit;background:var(--surface);color:var(--fg);border:1px solid var(--line);border-radius:4px;padding:7px 10px;min-width:0}
+input[type=search]{width:220px;max-width:100%}
+.group{background:var(--surface);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.ghead{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line)}
+.ghead .cli{font-weight:600;min-width:0;overflow-wrap:anywhere}
+.ghead .cli span{font-family:var(--f-mono);font-weight:400;color:var(--muted);margin-right:6px}
+.pill{font-size:12px;font-weight:600;padding:2px 8px;border-radius:99px;white-space:nowrap}
+.pill.exacto{background:var(--bad-soft);color:var(--bad)}
+.pill.importe{background:var(--warn-soft);color:var(--warn)}
+.pill.cantidad{background:var(--info-soft);color:var(--info)}
+.gnote{color:var(--muted);font-size:12px;margin-left:auto}
+.orders{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr))}
+.ord{padding:10px 14px;min-width:0;border-right:1px solid var(--line)}
+.ord:last-child{border-right:0}
+.ohead{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+.ohead b{font-family:var(--f-mono);font-weight:500}
+.ohead span{color:var(--muted);font-size:12px}
+.tw{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:12.5px}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;font-weight:500;padding:4px 6px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:4px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+th.n,td.n{text-align:right;white-space:nowrap}
+tr.tot td{font-weight:600;border-bottom:0}
+.empty{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:20px;color:var(--muted)}
+.rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.rules div{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.rules p{margin:0;color:var(--muted)}
+.foot{color:var(--muted);font-size:12px}
+</style>
+</head><body>
+<div class="wrap">
+  <header>
+    <h1>Control de Duplicados</h1>
+    <p class="sub">Subí el PDF “Control y ajuste de pedidos” de ChessERP. La herramienta lee los pedidos y marca los que un mismo cliente cargó más de una vez. El PDF se procesa en tu navegador.</p>
+  </header>
+
+  <label class="drop" id="drop" tabindex="0" for="file">
+    <strong id="dropTitle">Soltá el PDF acá o hacé clic para elegirlo</strong>
+    <small>Formato: Control y ajuste de pedidos, consolidado por precarga</small>
+    <input id="file" type="file" accept="application/pdf,.pdf" hidden>
+  </label>
+  <div class="status" id="status" role="status"></div>
+
+  <section id="intro" class="rules" aria-label="Qué detecta"><div><span class="pill exacto">Pedido duplicado</span><p>Mismo cliente, mismos SKU y mismo importe final, en pedidos con distinto número.</p></div></section>
+
+  <section id="result" hidden style="display:flex;flex-direction:column;gap:20px">
+    <div class="stats" id="stats"></div>
+    <div class="bar">
+      <div class="l">
+        <input type="search" id="q" placeholder="Buscar cliente o pedido" aria-label="Buscar cliente o pedido">
+      </div>
+      <div class="l"><button id="cp" type="button" class="ghost">Copiar para Sheets</button><button id="xls" type="button">Descargar Excel</button></div>
+    </div>
+    <textarea id="tsv" hidden rows="6" style="width:100%;font-family:var(--f-mono);font-size:12px;background:var(--surface);color:var(--fg);border:1px solid var(--line)" aria-label="Datos para copiar"></textarea>
+    <div id="groups" style="display:flex;flex-direction:column;gap:14px"></div>
+    <details>
+      <summary style="cursor:pointer;font-weight:500">Todos los pedidos leídos</summary>
+      <div class="tw" style="margin-top:10px"><table id="all"></table></div>
+    </details>
+  </section>
+  <p class="foot">Los pedidos se comparan solo dentro del mismo cliente. Si el mismo cliente aparece con distinto nombre, no se agrupa.</p>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script><script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script><script>
+function num(s){return parseFloat(String(s).replace(/,/g,''));}
+function parseLines(lines){
+  const orders=[];let cur=null;
+  const hdr=/^\s*ENT:\s*(\d{2}\/\d{2}\/\d{2})\s*-\s*PED:\s*(\d+).*?CLI:\s*\((\d+)\)\s*(.*?)\s*-\s*REP:\s*(\d+)\s*-\s*VND:\s*(\d+)/;
+  const numTok=/^-?[\d,]*\.?\d+$/;
+  for(const raw of lines){
+    const line=raw.replace(/\s+/g,' ').trim();
+    const h=line.match(hdr);
+    if(h){cur={fecha:h[1],ped:h[2],cli:h[3],nombre:h[4],vnd:h[6],items:[]};orders.push(cur);continue;}
+    if(!cur)continue;
+    const t=line.split(' ');
+    if(t.length<9||!/^\d+$/.test(t[0]))continue;
+    const tail=t.slice(-7);
+    if(!tail.every(x=>numTok.test(x)))continue;
+    const [bultos,unidades,peso,precio,bonif,neto,final]=tail.map(num);
+    cur.items.push({codigo:t[0],desc:t.slice(1,-7).join(' '),bultos,unidades,precio,bonif,neto,final});
+  }
+  return orders.filter(o=>o.items.length);
+}
+function r2(x){return Math.round(x*100)/100;}
+function analyze(orders){
+  orders.forEach(o=>{
+    o.total=r2(o.items.reduce((a,i)=>a+i.final,0));
+    const m=new Map();
+    o.items.forEach(i=>{const k=i.codigo;const e=m.get(k)||{b:0,u:0};e.b+=i.bultos;e.u+=i.unidades;m.set(k,e);});
+    const ks=[...m.keys()].sort();
+    o.skus=ks.join(',');
+    o.sig=ks.map(k=>k+':'+m.get(k).b+'/'+m.get(k).u).join('|');
+  });
+  const byCli=new Map();
+  orders.forEach(o=>{(byCli.get(o.cli)||byCli.set(o.cli,[]).get(o.cli)).push(o);});
+  const groups=[];
+  for(const [cli,os] of byCli){
+    if(os.length<2)continue;
+    const bySk=new Map();
+    os.forEach(o=>(bySk.get(o.skus)||bySk.set(o.skus,[]).get(o.skus)).push(o));
+    for(const g of bySk.values()){
+      const done=new Set();
+      g.forEach(a=>{
+        if(done.has(a))return;
+        const m=g.filter(b=>Math.abs(b.total-a.total)<0.05);
+        if(m.length>1){m.forEach(x=>done.add(x));groups.push({cli,nombre:a.nombre,nivel:'exacto',orders:m});}
+      });
+    }
+  }
+  groups.sort((a,b)=>b.orders[0].total-a.orders[0].total);
+  return groups;
+}
+const $=id=>document.getElementById(id);
+const fmt=n=>n.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2});
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const NIV={exacto:'Pedido duplicado'};
+const NOTE={exacto:'Mismos SKU e importe'};
+let ORDERS=[],GROUPS=[],FILE='';
+
+function setStatus(t,err){const s=$('status');s.textContent=t;s.className='status'+(err?' err':'');}
+
+async function pdfToLines(buf){
+  pdfjsLib.GlobalWorkerOptions.workerSrc='';
+  const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+  const lines=[];
+  for(let p=1;p<=pdf.numPages;p++){
+    setStatus('Leyendo página '+p+' de '+pdf.numPages+'…');
+    const page=await pdf.getPage(p);
+    const tc=await page.getTextContent();
+    const rows=[];
+    for(const it of tc.items){
+      if(!it.str||!it.str.trim())continue;
+      const y=it.transform[5],x=it.transform[4];
+      let r=rows.find(r=>Math.abs(r.y-y)<2.5);
+      if(!r){r={y,c:[]};rows.push(r);}
+      r.c.push({x,s:it.str});
+    }
+    rows.sort((a,b)=>b.y-a.y);
+    rows.forEach(r=>{r.c.sort((a,b)=>a.x-b.x);lines.push(r.c.map(c=>c.s).join(' '));});
+  }
+  return lines;
+}
+
+async function handle(file){
+  if(!file)return;
+  if(!/\.pdf$/i.test(file.name)&&file.type!=='application/pdf'){setStatus('El archivo tiene que ser un PDF.',true);return;}
+  FILE=file.name;
+  try{
+    setStatus('Leyendo el PDF…');
+    const lines=await pdfToLines(await file.arrayBuffer());
+    ORDERS=parseLines(lines);
+    if(!ORDERS.length){setStatus('No encontré pedidos. Revisá que sea el reporte “Control y ajuste de pedidos”.',true);return;}
+    GROUPS=analyze(ORDERS);
+    $('dropTitle').textContent=file.name;
+    setStatus('');
+    $('intro').hidden=true;$('result').hidden=false;
+    render();
+  }catch(e){console.error(e);setStatus('No pude leer el PDF: '+(e&&e.message||e),true);}
+}
+
+function render(){
+  const cnt={exacto:0,importe:0,cantidad:0};GROUPS.forEach(g=>cnt[g.nivel]++);
+  const clis=new Set(ORDERS.map(o=>o.cli)).size;
+  const dupOrders=GROUPS.filter(g=>g.nivel==='exacto').reduce((a,g)=>a+g.orders.length-1,0);
+  const dupAmt=GROUPS.filter(g=>g.nivel==='exacto').reduce((a,g)=>a+g.orders.slice(1).reduce((x,o)=>x+o.total,0),0);
+  $('stats').innerHTML=
+    `<div class="stat"><b>${ORDERS.length}</b><span>pedidos leídos, ${clis} clientes</span></div>`+
+    `<div class="stat bad"><b>${cnt.exacto}</b><span>grupos de pedidos duplicados</span></div>`+
+    `<div class="stat bad"><b>${dupOrders}</b><span>pedidos de más, $ ${fmt(dupAmt)}</span></div>`;
+  const q=$('q').value.trim().toLowerCase();
+  const list=GROUPS.filter(g=>(!q||(g.cli+' '+g.nombre+' '+g.orders.map(o=>o.ped).join(' ')).toLowerCase().includes(q)));
+  $('groups').innerHTML=list.length?list.map(groupHtml).join(''):
+    `<div class="empty">${GROUPS.length?'Ningún grupo coincide con el filtro.':'No se encontraron pedidos duplicados en este PDF.'}</div>`;
+  $('all').innerHTML='<thead><tr><th>Fecha</th><th>Pedido</th><th>Cliente</th><th>Nombre</th><th>Vnd</th><th class="n">Ítems</th><th class="n">Total final</th></tr></thead><tbody>'+
+    ORDERS.map(o=>`<tr><td>${o.fecha}</td><td class="mono">${o.ped}</td><td class="mono">${o.cli}</td><td>${esc(o.nombre)}</td><td>${o.vnd}</td><td class="n">${o.items.length}</td><td class="n">${fmt(o.total)}</td></tr>`).join('')+'</tbody>';
+}
+
+function groupHtml(g){
+  return `<article class="group"><div class="ghead"><span class="cli"><span>(${g.cli})</span>${esc(g.nombre)}</span><span class="pill ${g.nivel}">${NIV[g.nivel]}</span><span class="gnote">${g.orders.length} pedidos · ${NOTE[g.nivel]}</span></div><div class="orders">`+
+  g.orders.map(o=>`<div class="ord"><div class="ohead"><b>Pedido ${o.ped}</b><span>${o.fecha} · Vnd ${o.vnd}</span></div><div class="tw"><table><thead><tr><th>Código</th><th>Artículo</th><th class="n">Bult</th><th class="n">Unid</th><th class="n">Final</th></tr></thead><tbody>`+
+   o.items.map(i=>`<tr><td class="mono">${i.codigo}</td><td>${esc(i.desc)}</td><td class="n">${i.bultos}</td><td class="n">${i.unidades}</td><td class="n">${fmt(i.final)}</td></tr>`).join('')+
+   `<tr class="tot"><td colspan="4">Total</td><td class="n">${fmt(o.total)}</td></tr></tbody></table></div></div>`).join('')+`</div></article>`;
+}
+
+function dupRows(){const r=[];GROUPS.forEach((g,k)=>g.orders.forEach(o=>r.push({Grupo:k+1,Tipo:NIV[g.nivel],Cliente:g.cli,Nombre:g.nombre,Pedido:o.ped,Fecha:o.fecha,Vendedor:o.vnd,Items:o.items.length,'Total final':o.total})));return r;}
+async function exportXls(){
+  try{
+    if(typeof XLSX==='undefined')throw {code:'xlsx_no_cargo',message:'No cargó la librería de Excel (revisá la conexión y recargá la página).'};
+    const wb=XLSX.utils.book_new();
+    const dup=dupRows();
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(dup.length?dup:[{Resultado:'Sin duplicados'}]),'Duplicados');
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(ORDERS.map(o=>({Fecha:o.fecha,Pedido:o.ped,Cliente:o.cli,Nombre:o.nombre,Vendedor:o.vnd,Items:o.items.length,'Total final':o.total}))),'Pedidos');
+    const det=[];ORDERS.forEach(o=>o.items.forEach(i=>det.push({Pedido:o.ped,Cliente:o.cli,Nombre:o.nombre,Codigo:i.codigo,Articulo:i.desc,Bultos:i.bultos,Unidades:i.unidades,Precio:i.precio,Bonificacion:i.bonif,'Subtotal neto':i.neto,'Subtotal final':i.final})));
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(det),'Detalle');
+        XLSX.writeFile(wb,'pedidos-duplicados.xlsx');
+    setStatus('');
+  }catch(e){
+    if(e&&e.code==='declined')return;
+    console.error(e);
+    setStatus('No se pudo descargar el Excel: '+((e&&e.message)||'error')+(e&&e.code?' ['+e.code+']':''),true);
+  }
+}
+async function copySheets(){
+  const rows=dupRows();
+  const cols=['Grupo','Tipo','Cliente','Nombre','Pedido','Fecha','Vendedor','Items','Total final'];
+  const tsv=[cols.join('\t')].concat(rows.map(r=>cols.map(c=>r[c]).join('\t'))).join('\n');
+  try{await navigator.clipboard.writeText(tsv);setStatus('Copiado. Pegalo en Google Sheets con Ctrl+V.');}
+  catch(e){const t=$('tsv');t.hidden=false;t.value=tsv;t.select();setStatus('Seleccioná el texto de abajo, copialo (Ctrl+C) y pegalo en Google Sheets.');}
+}
+const drop=$('drop');
+$('file').addEventListener('change',e=>handle(e.target.files[0]));
+['dragover','dragenter'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('over');}));
+['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('over');}));
+drop.addEventListener('drop',e=>handle(e.dataTransfer.files[0]));
+drop.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();$('file').click();}});
+$('q').addEventListener('input',render);$('xls').addEventListener('click',exportXls);$('cp').addEventListener('click',copySheets);
+</script></body></html>
